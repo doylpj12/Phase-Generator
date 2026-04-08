@@ -146,7 +146,23 @@ async function generate() {
         continue;
       }
 
-      const childName = `${card.name} — ${itemName}`;
+      const childName = `[PHASE] ${card.name} — ${itemName}`;
+
+      // Fetch parent attachments
+      const attachRes = await fetch(
+        `https://api.trello.com/1/cards/${cardId}/attachments?key=${API_KEY}&token=${token}`
+      );
+      const attachments = await attachRes.json();
+
+      // Fetch parent custom fields
+      const cfRes = await fetch(
+        `https://api.trello.com/1/cards/${cardId}/customFieldItems?key=${API_KEY}&token=${token}`
+      );
+      const customFields = await cfRes.json();
+
+      // Build child description: parent desc + parent link
+      const parentDesc = card.desc ? card.desc + '\n\n' : '';
+      const childDesc = `${parentDesc}⬆️ Parent card: ${card.url}`;
 
       const createRes = await fetch(`https://api.trello.com/1/cards`, {
         method: 'POST',
@@ -157,10 +173,29 @@ async function generate() {
           name: childName,
           start: dates.start.toISOString(),
           due: dates.due.toISOString(),
-          desc: `⬆️ Parent card: ${card.url}`
+          desc: childDesc
         })
       });
       const child = await createRes.json();
+
+      // Copy attachments to child card (skip Trello card attachments which have no url)
+      for (const att of attachments) {
+        if (!att.url) continue;
+        await fetch(`https://api.trello.com/1/cards/${child.id}/attachments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: API_KEY, token, url: att.url, name: att.name })
+        });
+      }
+
+      // Copy custom fields to child card
+      for (const cf of customFields) {
+        await fetch(`https://api.trello.com/1/card/${child.id}/customField/${cf.idCustomField}/item`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: API_KEY, token, value: cf.value, idValue: cf.idValue || undefined })
+        });
+      }
 
       // Update checklist item name to be a hyperlink to the child card
       await fetch(`https://api.trello.com/1/cards/${cardId}/checkItem/${item.id}`, {
