@@ -39,7 +39,10 @@
 <script>
 const API_KEY = 'fa57f1ac4238ca2d66c78062d4493fd1';
 
-const t = TrelloPowerUp.iframe({ appKey: API_KEY, appName: 'Phase Generator' });
+const t = TrelloPowerUp.iframe({
+  appKey: API_KEY,
+  appName: 'Phase Generator'
+});
 
 // Parse "4/1/26 - 4/5/26" into JS Date objects
 function parseDateRange(str) {
@@ -60,9 +63,17 @@ async function generate() {
   status.textContent = 'Starting...';
 
   try {
-    const token = await t.getRestApi().getToken();
-    const card = await t.card('id', 'name', 'url', 'idBoard');
+    // Authorize and get token
+    const restApi = t.getRestApi();
+    let token;
+    try {
+      token = await restApi.getToken();
+    } catch(e) {
+      await restApi.authorize({ scope: 'read,write' });
+      token = await restApi.getToken();
+    }
 
+    const card = await t.card('id', 'name', 'url', 'idBoard');
     status.textContent = 'Reading checklists...';
 
     // Fetch checklists on this card
@@ -74,7 +85,7 @@ async function generate() {
     // Find the "Phases" checklist (case-insensitive)
     const phaseChecklist = checklists.find(cl => cl.name.toLowerCase() === 'phases');
     if (!phaseChecklist) {
-      status.textContent = '❌ No checklist named "Phases" found on this card. Please add one and try again.';
+      status.textContent = '❌ No checklist named "Phases" found on this card.';
       btn.disabled = false;
       return;
     }
@@ -92,8 +103,7 @@ async function generate() {
     );
     const lists = await listsRes.json();
 
-    // Find a list named "Phases" on the board for child cards to land in
-    // Falls back to the same list as the parent card if none found
+    // Find a list named "Phases" on the board, fallback to parent card's list
     let targetList = lists.find(l => l.name.toLowerCase() === 'phases');
     if (!targetList) {
       const parentCardRes = await fetch(
@@ -112,15 +122,13 @@ async function generate() {
 
       const dates = parseDateRange(itemName);
       if (!dates) {
-        status.textContent = `⚠️ Skipping "${itemName}" — no valid date range (e.g. 4/1/26 - 4/5/26) found. Continuing...`;
+        status.textContent = `⚠️ Skipping "${itemName}" — no valid date range found. Continuing...`;
         await new Promise(r => setTimeout(r, 1500));
         continue;
       }
 
-      // Child card name: "Parent Name — Phase Item Text"
       const childName = `${card.name} — ${itemName}`;
 
-      // Create the child card with start and due dates
       const createRes = await fetch(`https://api.trello.com/1/cards`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -136,13 +144,11 @@ async function generate() {
       });
       const child = await createRes.json();
 
-      // Attach parent link to child card
       await fetch(`https://api.trello.com/1/cards/${child.id}/attachments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          key: API_KEY,
-          token: token,
+          key: API_KEY, token,
           url: card.url,
           name: `⬆️ Parent: ${card.name}`
         })
@@ -151,7 +157,6 @@ async function generate() {
       childLinks.push({ url: child.url, name: `⬇️ ${itemName}` });
     }
 
-    // Attach all child links back onto the parent card
     if (childLinks.length > 0) {
       status.textContent = 'Linking phase cards back to parent...';
       for (const link of childLinks) {
@@ -159,8 +164,7 @@ async function generate() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            key: API_KEY,
-            token: token,
+            key: API_KEY, token,
             url: link.url,
             name: link.name
           })
