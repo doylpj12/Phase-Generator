@@ -12,13 +12,10 @@ TrelloPowerUp.initialize({
       icon: 'https://cdn.iconscout.com/icon/free/png-256/free-trello-226534.png',
       text: 'Generate Phase Cards',
       callback: function(t) {
-        return t.card('id', 'name', 'url', 'idBoard').then(function(card) {
-          return t.popup({
-            title: 'Generate Phase Cards',
-            url: './generate.html',
-            args: { cardId: card.id, cardName: card.name, cardUrl: card.url, boardId: card.idBoard },
-            height: 120
-          });
+        return t.popup({
+          title: 'Generate Phase Cards',
+          url: './generate.html',
+          height: 120
         });
       }
     }];
