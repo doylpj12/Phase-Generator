@@ -95,8 +95,6 @@ async function generate() {
       targetList = lists.find(l => l.id === card.idList);
     }
 
-    const childLinks = [];
-
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       const itemName = item.name.trim();
@@ -125,27 +123,18 @@ async function generate() {
       });
       const child = await createRes.json();
 
-      await fetch(`https://api.trello.com/1/cards/${child.id}/attachments`, {
-        method: 'POST',
+      // Update checklist item name to be a hyperlink to the child card
+      await fetch(`https://api.trello.com/1/cards/${cardId}/checkItem/${item.id}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: API_KEY, token, url: card.url, name: `⬆️ Parent: ${card.name}` })
+        body: JSON.stringify({
+          key: API_KEY, token,
+          name: `[${itemName}](${child.url})`
+        })
       });
-
-      childLinks.push({ url: child.url, name: `⬇️ ${itemName}` });
     }
 
-    if (childLinks.length > 0) {
-      status.textContent = 'Linking phase cards back to parent...';
-      for (const link of childLinks) {
-        await fetch(`https://api.trello.com/1/cards/${cardId}/attachments`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: API_KEY, token, url: link.url, name: link.name })
-        });
-      }
-    }
-
-    status.textContent = `✅ Done! Created ${childLinks.length} phase card${childLinks.length !== 1 ? 's' : ''}.`;
+    status.textContent = `✅ Done! Phase cards created and checklist items linked.`;
 
   } catch (err) {
     status.textContent = `❌ Error: ${err.message}`;
