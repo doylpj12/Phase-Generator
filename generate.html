@@ -3,32 +3,10 @@
 <head>
   <title>Generate Phase Cards</title>
   <style>
-    body {
-      font-family: sans-serif;
-      padding: 16px;
-      font-size: 14px;
-      background: #fff;
-    }
-    button {
-      padding: 8px 16px;
-      background: #0079bf;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      width: 100%;
-      font-size: 14px;
-    }
-    button:disabled {
-      background: #aaa;
-      cursor: not-allowed;
-    }
-    #status {
-      margin-top: 10px;
-      color: #555;
-      font-size: 13px;
-      line-height: 1.5;
-    }
+    body { font-family: sans-serif; padding: 16px; font-size: 14px; background: #fff; }
+    button { padding: 8px 16px; background: #0079bf; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%; font-size: 14px; }
+    button:disabled { background: #aaa; cursor: not-allowed; }
+    #status { margin-top: 10px; color: #555; font-size: 13px; line-height: 1.5; }
   </style>
 </head>
 <body>
@@ -44,7 +22,6 @@ const t = TrelloPowerUp.iframe({
   appName: 'Phase Generator'
 });
 
-// Parse "4/1/26 - 4/5/26" into JS Date objects
 function parseDateRange(str) {
   const match = str.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})\s*-\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/);
   if (!match) return null;
@@ -63,6 +40,20 @@ async function generate() {
   status.textContent = 'Starting...';
 
   try {
+    // Get card data passed from index.html via args
+    const args = t.arg('cardId') ? {
+      cardId: t.arg('cardId'),
+      cardName: t.arg('cardName'),
+      cardUrl: t.arg('cardUrl'),
+      boardId: t.arg('boardId')
+    } : null;
+
+    if (!args || !args.cardId) {
+      status.textContent = '❌ Could not read card data. Please try closing and reopening.';
+      btn.disabled = false;
+      return;
+    }
+
     // Authorize and get token
     const restApi = t.getRestApi();
     let token;
@@ -73,16 +64,13 @@ async function generate() {
       token = await restApi.getToken();
     }
 
-    const card = await t.card('id', 'name', 'url', 'idBoard');
     status.textContent = 'Reading checklists...';
 
-    // Fetch checklists on this card
     const clRes = await fetch(
-      `https://api.trello.com/1/cards/${card.id}/checklists?key=${API_KEY}&token=${token}`
+      `https://api.trello.com/1/cards/${args.cardId}/checklists?key=${API_KEY}&token=${token}`
     );
     const checklists = await clRes.json();
 
-    // Find the "Phases" checklist (case-insensitive)
     const phaseChecklist = checklists.find(cl => cl.name.toLowerCase() === 'phases');
     if (!phaseChecklist) {
       status.textContent = '❌ No checklist named "Phases" found on this card.';
@@ -97,17 +85,15 @@ async function generate() {
       return;
     }
 
-    // Get all lists on this board
     const listsRes = await fetch(
-      `https://api.trello.com/1/boards/${card.idBoard}/lists?key=${API_KEY}&token=${token}`
+      `https://api.trello.com/1/boards/${args.boardId}/lists?key=${API_KEY}&token=${token}`
     );
     const lists = await listsRes.json();
 
-    // Find a list named "Phases" on the board, fallback to parent card's list
     let targetList = lists.find(l => l.name.toLowerCase() === 'phases');
     if (!targetList) {
       const parentCardRes = await fetch(
-        `https://api.trello.com/1/cards/${card.id}?key=${API_KEY}&token=${token}`
+        `https://api.trello.com/1/cards/${args.cardId}?key=${API_KEY}&token=${token}`
       );
       const parentCard = await parentCardRes.json();
       targetList = lists.find(l => l.id === parentCard.idList);
@@ -122,24 +108,23 @@ async function generate() {
 
       const dates = parseDateRange(itemName);
       if (!dates) {
-        status.textContent = `⚠️ Skipping "${itemName}" — no valid date range found. Continuing...`;
+        status.textContent = `⚠️ Skipping "${itemName}" — no valid date range found.`;
         await new Promise(r => setTimeout(r, 1500));
         continue;
       }
 
-      const childName = `${card.name} — ${itemName}`;
+      const childName = `${args.cardName} — ${itemName}`;
 
       const createRes = await fetch(`https://api.trello.com/1/cards`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          key: API_KEY,
-          token: token,
+          key: API_KEY, token,
           idList: targetList.id,
           name: childName,
           start: dates.start.toISOString(),
           due: dates.due.toISOString(),
-          desc: `⬆️ Parent card: ${card.url}`
+          desc: `⬆️ Parent card: ${args.cardUrl}`
         })
       });
       const child = await createRes.json();
@@ -147,11 +132,7 @@ async function generate() {
       await fetch(`https://api.trello.com/1/cards/${child.id}/attachments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          key: API_KEY, token,
-          url: card.url,
-          name: `⬆️ Parent: ${card.name}`
-        })
+        body: JSON.stringify({ key: API_KEY, token, url: args.cardUrl, name: `⬆️ Parent: ${args.cardName}` })
       });
 
       childLinks.push({ url: child.url, name: `⬇️ ${itemName}` });
@@ -160,14 +141,10 @@ async function generate() {
     if (childLinks.length > 0) {
       status.textContent = 'Linking phase cards back to parent...';
       for (const link of childLinks) {
-        await fetch(`https://api.trello.com/1/cards/${card.id}/attachments`, {
+        await fetch(`https://api.trello.com/1/cards/${args.cardId}/attachments`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            key: API_KEY, token,
-            url: link.url,
-            name: link.name
-          })
+          body: JSON.stringify({ key: API_KEY, token, url: link.url, name: link.name })
         });
       }
     }
