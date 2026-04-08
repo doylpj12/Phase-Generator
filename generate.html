@@ -23,13 +23,30 @@ const t = TrelloPowerUp.iframe({
 });
 
 function parseDateRange(str) {
-  const match = str.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})\s*-\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/);
+  // Match dates with or without year: "4/20" or "4/20/26" or "4/20/2026"
+  const datePattern = '(\\d{1,2}\\/\\d{1,2}(?:\\/\\d{2,4})?)';
+  const match = str.match(new RegExp(datePattern + '\\s*-\\s*' + datePattern));
   if (!match) return null;
+
   const toISO = (d) => {
-    const [m, day, y] = d.split('/');
-    const year = y.length === 2 ? '20' + y : y;
-    return new Date(`${year}-${m.padStart(2,'0')}-${day.padStart(2,'0')}T12:00:00.000Z`);
+    const parts = d.split('/');
+    const m = parseInt(parts[0]);
+    const day = parseInt(parts[1]);
+    let year;
+    if (parts[2]) {
+      // Year provided
+      year = parts[2].length === 2 ? 2000 + parseInt(parts[2]) : parseInt(parts[2]);
+    } else {
+      // No year — use next occurrence of that date
+      const now = new Date();
+      const candidate = new Date(Date.UTC(now.getUTCFullYear(), m - 1, day));
+      // If the date has already passed today, use next year
+      const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+      year = candidate >= today ? now.getUTCFullYear() : now.getUTCFullYear() + 1;
+    }
+    return new Date(Date.UTC(year, m - 1, day, 12, 0, 0));
   };
+
   return { start: toISO(match[1]), due: toISO(match[2]) };
 }
 
