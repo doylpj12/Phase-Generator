@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Phase Card Generator Power-Up</title>
+  <meta http-equiv="Content-Security-Policy" content="frame-ancestors *">
+</head>
+<body>
+<script src="https://p.trellocdn.com/power-up.min.js"></script>
+<script>
+  TrelloPowerUp.initialize({
+    'card-buttons': function(t) {
+      return [{
+        icon: 'https://cdn.iconscout.com/icon/free/png-256/free-trello-226534.png',
+        text: 'Generate Phase Cards',
+        callback: function(t) {
+          return t.popup({
+            title: 'Generate Phase Cards',
+            url: './generate.html',
+            height: 120
+          });
+        }
+      }];
+    }
+  });
+</script>
+</body>
+</html>
