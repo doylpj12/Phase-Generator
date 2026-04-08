@@ -1,27 +1,32 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <title>Phase Card Generator Power-Up</title>
-  <meta http-equiv="Content-Security-Policy" content="frame-ancestors *">
-</head>
+<head><title>Phase Card Generator Power-Up</title></head>
 <body>
 <script src="https://p.trellocdn.com/power-up.min.js"></script>
 <script>
-  TrelloPowerUp.initialize({
-    'card-buttons': function(t) {
-      return [{
-        icon: 'https://cdn.iconscout.com/icon/free/png-256/free-trello-226534.png',
-        text: 'Generate Phase Cards',
-        callback: function(t) {
+const API_KEY = 'fa57f1ac4238ca2d66c78062d4493fd1';
+
+TrelloPowerUp.initialize({
+  'card-buttons': function(t) {
+    return [{
+      icon: 'https://cdn.iconscout.com/icon/free/png-256/free-trello-226534.png',
+      text: 'Generate Phase Cards',
+      callback: function(t) {
+        return t.card('id', 'name', 'url', 'idBoard').then(function(card) {
           return t.popup({
             title: 'Generate Phase Cards',
             url: './generate.html',
+            args: { cardId: card.id, cardName: card.name, cardUrl: card.url, boardId: card.idBoard },
             height: 120
           });
-        }
-      }];
-    }
-  });
+        });
+      }
+    }];
+  }
+}, {
+  appKey: API_KEY,
+  appName: 'Phase Generator'
+});
 </script>
 </body>
 </html>
