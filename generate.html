@@ -90,9 +90,34 @@ async function generate() {
     );
     const lists = await listsRes.json();
 
-    let targetList = lists.find(l => l.name.toLowerCase() === 'phases');
-    if (!targetList) {
-      targetList = lists.find(l => l.id === card.idList);
+    // Find the list whose date range contains the given start date
+    // List names are formatted like "3/30 - 4/5" or "4/6 - 4-12"
+    function getWeekList(startDate) {
+      const target = new Date(startDate);
+      target.setUTCHours(0,0,0,0);
+
+      for (const list of lists) {
+        // Match patterns like "3/30 - 4/5" or "4/6 - 4-12"
+        const match = list.name.match(/^(\d{1,2})[\/\-](\d{1,2})\s*[-–]\s*(\d{1,2})[\/\-](\d{1,2})$/);
+        if (!match) continue;
+
+        const [, sm, sd, em, ed] = match;
+
+        // Determine year — assume current year, handle Dec/Jan rollover
+        const now = new Date();
+        const year = now.getUTCFullYear();
+
+        let startOfWeek = new Date(Date.UTC(year, parseInt(sm) - 1, parseInt(sd)));
+        let endOfWeek = new Date(Date.UTC(year, parseInt(em) - 1, parseInt(ed)));
+
+        // Handle year rollover (e.g. Dec -> Jan)
+        if (endOfWeek < startOfWeek) endOfWeek.setUTCFullYear(year + 1);
+
+        if (target >= startOfWeek && target <= endOfWeek) {
+          return list;
+        }
+      }
+      return null;
     }
 
     for (let i = 0; i < items.length; i++) {
@@ -110,6 +135,13 @@ async function generate() {
       const dates = parseDateRange(itemName);
       if (!dates) {
         status.textContent = `⚠️ Skipping "${itemName}" — no valid date range found.`;
+        await new Promise(r => setTimeout(r, 1500));
+        continue;
+      }
+
+      const targetList = getWeekList(dates.start);
+      if (!targetList) {
+        status.textContent = `⚠️ Skipping "${itemName}" — no matching week list found for that start date.`;
         await new Promise(r => setTimeout(r, 1500));
         continue;
       }
