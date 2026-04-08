@@ -39,7 +39,7 @@
 <script>
 const API_KEY = 'fa57f1ac4238ca2d66c78062d4493fd1';
 
-const t = TrelloPowerUp.iframe();
+const t = TrelloPowerUp.iframe({ appKey: API_KEY, appName: 'Phase Generator' });
 
 // Parse "4/1/26 - 4/5/26" into JS Date objects
 function parseDateRange(str) {
