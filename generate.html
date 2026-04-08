@@ -160,9 +160,12 @@ async function generate() {
       );
       const customFields = await cfRes.json();
 
-      // Build child description: parent desc + parent link
-      const parentDesc = card.desc ? card.desc + '\n\n' : '';
-      const childDesc = `${parentDesc}⬆️ Parent card: ${card.url}`;
+      // Build child description: parent link first, then parent desc
+      const parentDesc = card.desc ? '\n\n' + card.desc : '';
+      const childDesc = `⬆️ Parent card: ${card.url}${parentDesc}`;
+
+      // Get label IDs from parent card
+      const labelIds = card.idLabels || [];
 
       const createRes = await fetch(`https://api.trello.com/1/cards`, {
         method: 'POST',
@@ -173,10 +176,31 @@ async function generate() {
           name: childName,
           start: dates.start.toISOString(),
           due: dates.due.toISOString(),
-          desc: childDesc
+          desc: childDesc,
+          idLabels: labelIds
         })
       });
       const child = await createRes.json();
+
+      // Add light grey cover to child card
+      await fetch(`https://api.trello.com/1/cards/${child.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          key: API_KEY, token,
+          cover: { color: 'sky', brightness: 'light', size: 'full' }
+        })
+      });
+
+      // Add comment to child card
+      await fetch(`https://api.trello.com/1/cards/${child.id}/actions/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          key: API_KEY, token,
+          text: '⚠️ PHASE CARD - PUT COMMENTS ON PRIMARY CARD'
+        })
+      });
 
       // Copy attachments to child card (skip Trello card attachments which have no url)
       for (const att of attachments) {
