@@ -40,20 +40,6 @@ async function generate() {
   status.textContent = 'Starting...';
 
   try {
-    // Get card data passed from index.html via args
-    const args = t.arg('cardId') ? {
-      cardId: t.arg('cardId'),
-      cardName: t.arg('cardName'),
-      cardUrl: t.arg('cardUrl'),
-      boardId: t.arg('boardId')
-    } : null;
-
-    if (!args || !args.cardId) {
-      status.textContent = '❌ Could not read card data. Please try closing and reopening.';
-      btn.disabled = false;
-      return;
-    }
-
     // Authorize and get token
     const restApi = t.getRestApi();
     let token;
@@ -64,10 +50,29 @@ async function generate() {
       token = await restApi.getToken();
     }
 
+    // Get card context directly from the iframe
+    const context = t.getContext();
+    const cardId = context.card;
+    const boardId = context.board;
+
+    if (!cardId) {
+      status.textContent = '❌ Could not read card data.';
+      btn.disabled = false;
+      return;
+    }
+
+    status.textContent = 'Reading card...';
+
+    // Fetch card details
+    const cardRes = await fetch(
+      `https://api.trello.com/1/cards/${cardId}?key=${API_KEY}&token=${token}`
+    );
+    const card = await cardRes.json();
+
     status.textContent = 'Reading checklists...';
 
     const clRes = await fetch(
-      `https://api.trello.com/1/cards/${args.cardId}/checklists?key=${API_KEY}&token=${token}`
+      `https://api.trello.com/1/cards/${cardId}/checklists?key=${API_KEY}&token=${token}`
     );
     const checklists = await clRes.json();
 
@@ -86,17 +91,13 @@ async function generate() {
     }
 
     const listsRes = await fetch(
-      `https://api.trello.com/1/boards/${args.boardId}/lists?key=${API_KEY}&token=${token}`
+      `https://api.trello.com/1/boards/${boardId}/lists?key=${API_KEY}&token=${token}`
     );
     const lists = await listsRes.json();
 
     let targetList = lists.find(l => l.name.toLowerCase() === 'phases');
     if (!targetList) {
-      const parentCardRes = await fetch(
-        `https://api.trello.com/1/cards/${args.cardId}?key=${API_KEY}&token=${token}`
-      );
-      const parentCard = await parentCardRes.json();
-      targetList = lists.find(l => l.id === parentCard.idList);
+      targetList = lists.find(l => l.id === card.idList);
     }
 
     const childLinks = [];
@@ -113,7 +114,7 @@ async function generate() {
         continue;
       }
 
-      const childName = `${args.cardName} — ${itemName}`;
+      const childName = `${card.name} — ${itemName}`;
 
       const createRes = await fetch(`https://api.trello.com/1/cards`, {
         method: 'POST',
@@ -124,7 +125,7 @@ async function generate() {
           name: childName,
           start: dates.start.toISOString(),
           due: dates.due.toISOString(),
-          desc: `⬆️ Parent card: ${args.cardUrl}`
+          desc: `⬆️ Parent card: ${card.url}`
         })
       });
       const child = await createRes.json();
@@ -132,7 +133,7 @@ async function generate() {
       await fetch(`https://api.trello.com/1/cards/${child.id}/attachments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: API_KEY, token, url: args.cardUrl, name: `⬆️ Parent: ${args.cardName}` })
+        body: JSON.stringify({ key: API_KEY, token, url: card.url, name: `⬆️ Parent: ${card.name}` })
       });
 
       childLinks.push({ url: child.url, name: `⬇️ ${itemName}` });
@@ -141,7 +142,7 @@ async function generate() {
     if (childLinks.length > 0) {
       status.textContent = 'Linking phase cards back to parent...';
       for (const link of childLinks) {
-        await fetch(`https://api.trello.com/1/cards/${args.cardId}/attachments`, {
+        await fetch(`https://api.trello.com/1/cards/${cardId}/attachments`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ key: API_KEY, token, url: link.url, name: link.name })
