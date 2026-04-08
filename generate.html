@@ -42,13 +42,8 @@ async function generate() {
   try {
     // Authorize and get token
     const restApi = t.getRestApi();
-    let token;
-    try {
-      token = await restApi.getToken();
-    } catch(e) {
-      await restApi.authorize({ scope: 'read,write' });
-      token = await restApi.getToken();
-    }
+    await restApi.authorize({ scope: 'read,write', expiration: 'never' });
+    const token = await restApi.getToken();
 
     // Get card context directly from the iframe
     const context = t.getContext();
