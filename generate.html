@@ -100,6 +100,13 @@ async function generate() {
       const itemName = item.name.trim();
       status.textContent = `Creating card ${i + 1} of ${items.length}: ${itemName}`;
 
+      // Skip items already linked (already a markdown link)
+      if (itemName.startsWith('[')) {
+        status.textContent = `⏭️ Skipping "${itemName}" — already linked.`;
+        await new Promise(r => setTimeout(r, 500));
+        continue;
+      }
+
       const dates = parseDateRange(itemName);
       if (!dates) {
         status.textContent = `⚠️ Skipping "${itemName}" — no valid date range found.`;
