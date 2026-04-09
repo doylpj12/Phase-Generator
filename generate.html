@@ -194,7 +194,8 @@ async function generate() {
           start: dates.start.toISOString(),
           due: dates.due.toISOString(),
           desc: childDesc,
-          idLabels: labelIds
+          idLabels: labelIds,
+          idMembers: card.idMembers || []
         })
       });
       const child = await createRes.json();
