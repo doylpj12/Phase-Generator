@@ -115,27 +115,29 @@ async function generate() {
     const lists = await listsRes.json();
 
     // Find the list whose date range contains the given start date
-    // List names are formatted like "3/30 - 4/5" or "4/6 - 4-12"
+    // List names are formatted like "4/20 - 4/26"
     function getWeekList(startDate) {
       const target = new Date(startDate);
       target.setUTCHours(0,0,0,0);
 
+      const now = new Date();
+      const year = now.getUTCFullYear();
+
       for (const list of lists) {
-        // Match patterns like "3/30 - 4/5" or "4/6 - 4-12"
-        const match = list.name.match(/^(\d{1,2})[\/\-](\d{1,2})\s*[-–]\s*(\d{1,2})[\/\-](\d{1,2})$/);
+        // Strictly match list names like "4/20 - 4/26" (M/D - M/D)
+        const match = list.name.match(/^(\d{1,2})\/(\d{1,2})\s*-\s*(\d{1,2})\/(\d{1,2})$/);
         if (!match) continue;
 
         const [, sm, sd, em, ed] = match;
-
-        // Determine year — assume current year, handle Dec/Jan rollover
-        const now = new Date();
-        const year = now.getUTCFullYear();
 
         let startOfWeek = new Date(Date.UTC(year, parseInt(sm) - 1, parseInt(sd)));
         let endOfWeek = new Date(Date.UTC(year, parseInt(em) - 1, parseInt(ed)));
 
         // Handle year rollover (e.g. Dec -> Jan)
         if (endOfWeek < startOfWeek) endOfWeek.setUTCFullYear(year + 1);
+
+        // Set end of week to end of that day
+        endOfWeek.setUTCHours(23, 59, 59, 999);
 
         if (target >= startOfWeek && target <= endOfWeek) {
           return list;
