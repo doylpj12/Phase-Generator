@@ -39,11 +39,12 @@ function parseDateRange(str) {
       // Year provided
       year = parts[2].length === 2 ? 2000 + parseInt(parts[2]) : parseInt(parts[2]);
     } else {
-      // No year — use next occurrence of that date
+      // No year — use next occurrence, but allow up to 7 days in the past
+      // so recently-passed dates still work
       const now = new Date();
       const candidate = new Date(Date.UTC(now.getUTCFullYear(), m - 1, day));
-      const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-      year = candidate >= today ? now.getUTCFullYear() : now.getUTCFullYear() + 1;
+      const sevenDaysAgo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 7));
+      year = candidate >= sevenDaysAgo ? now.getUTCFullYear() : now.getUTCFullYear() + 1;
     }
     return new Date(Date.UTC(year, m - 1, day, 12, 0, 0));
   };
@@ -115,32 +116,30 @@ async function generate() {
     const lists = await listsRes.json();
 
     // Find the list whose date range contains the given start date
-    // List names are formatted like "4/20 - 4/26"
+    // Compare only month and day, ignoring year entirely
     function getWeekList(startDate) {
       const target = new Date(startDate);
-      target.setUTCHours(0,0,0,0);
-
-      const now = new Date();
-      const year = now.getUTCFullYear();
+      const targetMonth = target.getUTCMonth() + 1;
+      const targetDay = target.getUTCDate();
 
       for (const list of lists) {
-        // Strictly match list names like "4/20 - 4/26" (M/D - M/D)
         const match = list.name.match(/^(\d{1,2})\/(\d{1,2})\s*-\s*(\d{1,2})\/(\d{1,2})$/);
         if (!match) continue;
 
         const [, sm, sd, em, ed] = match;
+        const startM = parseInt(sm), startD = parseInt(sd);
+        const endM = parseInt(em), endD = parseInt(ed);
 
-        let startOfWeek = new Date(Date.UTC(year, parseInt(sm) - 1, parseInt(sd)));
-        let endOfWeek = new Date(Date.UTC(year, parseInt(em) - 1, parseInt(ed)));
+        // Convert to a simple numeric value for comparison: month * 100 + day
+        const targetVal = targetMonth * 100 + targetDay;
+        const startVal = startM * 100 + startD;
+        const endVal = endM * 100 + endD;
 
-        // Handle year rollover (e.g. Dec -> Jan)
-        if (endOfWeek < startOfWeek) endOfWeek.setUTCFullYear(year + 1);
-
-        // Set end of week to end of that day
-        endOfWeek.setUTCHours(23, 59, 59, 999);
-
-        if (target >= startOfWeek && target <= endOfWeek) {
-          return list;
+        // Handle year rollover (e.g. list is 12/28 - 1/3)
+        if (startVal <= endVal) {
+          if (targetVal >= startVal && targetVal <= endVal) return list;
+        } else {
+          if (targetVal >= startVal || targetVal <= endVal) return list;
         }
       }
       return null;
