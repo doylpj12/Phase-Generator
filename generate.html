@@ -167,8 +167,14 @@ async function generate() {
 
       const targetList = getWeekList(dates.start);
       if (!targetList) {
-        status.textContent = `⚠️ Skipping "${itemName}" — no matching week list found for that start date.`;
-        await new Promise(r => setTimeout(r, 1500));
+        // Debug: show what date we're looking for and what lists exist
+        const debugDate = dates.start.toISOString().split('T')[0];
+        const weekLists = lists
+          .filter(l => l.name.match(/^\d{1,2}\/\d{1,2}\s*-\s*\d{1,2}\/\d{1,2}$/))
+          .map(l => l.name)
+          .join(', ');
+        status.textContent = `⚠️ No match for start date ${debugDate}. Week lists found: ${weekLists || 'NONE'}`;
+        await new Promise(r => setTimeout(r, 5000));
         continue;
       }
 
