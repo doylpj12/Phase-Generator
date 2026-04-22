@@ -5,20 +5,32 @@
 <script src="https://p.trellocdn.com/power-up.min.js"></script>
 <script>
 const API_KEY = 'fa57f1ac4238ca2d66c78062d4493fd1';
-
 TrelloPowerUp.initialize({
   'card-buttons': function(t) {
-    return [{
-      icon: 'https://cdn.iconscout.com/icon/free/png-256/free-trello-226534.png',
-      text: 'Generate Phase Cards',
-      callback: function(t) {
-        return t.popup({
-          title: 'Generate Phase Cards',
-          url: './generate.html',
-          height: 120
-        });
+    return [
+      {
+        icon: 'https://cdn.iconscout.com/icon/free/png-256/free-trello-226534.png',
+        text: 'Generate Phase Cards',
+        callback: function(t) {
+          return t.popup({
+            title: 'Generate Phase Cards',
+            url: './generate.html',
+            height: 120
+          });
+        }
+      },
+      {
+        icon: 'https://cdn.iconscout.com/icon/free/png-256/free-trello-226534.png',
+        text: 'Generate Deposit Invoice',
+        callback: function(t) {
+          return t.popup({
+            title: 'Generate Deposit Invoice',
+            url: './deposit.html',
+            height: 120
+          });
+        }
       }
-    }];
+    ];
   }
 }, {
   appKey: API_KEY,
