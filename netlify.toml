@@ -1,6 +1,0 @@
-# Trello Phase Generator - v2
-[[headers]]
-  for = "/*"
-  [headers.values]
-    X-Frame-Options = "ALLOWALL"
-    Content-Security-Policy = "frame-ancestors *"
