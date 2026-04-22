@@ -30,6 +30,17 @@ TrelloPowerUp.initialize({
           });
         }
       }
+      {
+        icon: 'https://cdn.iconscout.com/icon/free/png-256/free-trello-226534.png',
+        text: 'Generate Partial Invoice',
+        callback: function(t) {
+          return t.popup({
+            title: 'Generate Partial Invoice',
+            url: './partial.html',
+            height: 120
+          });
+        }
+      }
     ];
   }
 }, {
