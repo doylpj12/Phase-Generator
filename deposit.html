@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Generate Deposit Invoice</title>
+  <style>
+    body { font-family: sans-serif; padding: 16px; font-size: 14px; background: #fff; }
+    button { padding: 8px 16px; background: #0079bf; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%; font-size: 14px; }
+    button:disabled { background: #aaa; cursor: not-allowed; }
+    #status { margin-top: 10px; color: #555; font-size: 13px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <button id="btn" onclick="generateDepositInvoices()">Generate Deposit Invoice</button>
+  <div id="status"></div>
+
+<script src="https://p.trellocdn.com/power-up.min.js"></script>
+<script>
+const API_KEY = 'fa57f1ac4238ca2d66c78062d4493fd1';
+
+// The target board name and list name for generated invoice cards
+const TARGET_BOARD_NAME = 'Accounts Receivable';
+const TARGET_LIST_NAME  = 'SO INV: Ready for Release';
+
+const t = TrelloPowerUp.iframe({
+  appKey: API_KEY,
+  appName: 'Phase Generator'
+});
+
+async function generateDepositInvoices() {
+  const btn    = document.getElementById('btn');
+  const status = document.getElementById('status');
+  btn.disabled = true;
+  status.textContent = 'Starting...';
+
+  try {
+    // Authorize
+    const restApi = t.getRestApi();
+    await restApi.authorize({ scope: 'read,write', expiration: 'never' });
+    const token = await restApi.getToken();
+
+    const context = t.getContext();
+    const cardId  = context.card;
+    if (!cardId) {
+      status.textContent = '❌ Could not read card data.';
+      btn.disabled = false;
+      return;
+    }
+
+    status.textContent = 'Reading parent card...';
+    const cardRes = await fetch(
+      `https://api.trello.com/1/cards/${cardId}?key=${API_KEY}&token=${token}`
+    );
+    const card = await cardRes.json();
+
+    status.textContent = 'Reading checklists...';
+    const clRes = await fetch(
+      `https://api.trello.com/1/cards/${cardId}/checklists?key=${API_KEY}&token=${token}`
+    );
+    const checklists = await clRes.json();
+
+    // Find the "Invoices" checklist (case-insensitive)
+    const invoicesChecklist = checklists.find(
+      cl => cl.name.toLowerCase() === 'invoices'
+    );
+    if (!invoicesChecklist) {
+      status.textContent = '❌ No checklist named "Invoices" found on this card.';
+      btn.disabled = false;
+      return;
+    }
+
+    // Filter to items that start with "DEPOSIT INVOICE" (case-insensitive)
+    // and are not already linked (linked items start with "[")
+    const items = invoicesChecklist.checkItems.filter(item => {
+      const name = item.name.trim();
+      return name.toUpperCase().startsWith('DEPOSIT INVOICE') && !name.startsWith('[');
+    });
+
+    if (!items.length) {
+      status.textContent = '⏭️ No unlinked DEPOSIT INVOICE items found in the Invoices checklist.';
+      btn.disabled = false;
+      return;
+    }
+
+    // Find the target board by name
+    status.textContent = `Finding "${TARGET_BOARD_NAME}" board...`;
+    const boardsRes = await fetch(
+      `https://api.trello.com/1/members/me/boards?key=${API_KEY}&token=${token}&fields=id,name`
+    );
+    const boards = await boardsRes.json();
+    const targetBoard = boards.find(
+      b => b.name.toLowerCase() === TARGET_BOARD_NAME.toLowerCase()
+    );
+    if (!targetBoard) {
+      status.textContent = `❌ Could not find a board named "${TARGET_BOARD_NAME}". Check the name and try again.`;
+      btn.disabled = false;
+      return;
+    }
+
+    // Find the target list on that board
+    const listsRes = await fetch(
+      `https://api.trello.com/1/boards/${targetBoard.id}/lists?key=${API_KEY}&token=${token}&fields=id,name`
+    );
+    const lists = await listsRes.json();
+    const targetList = lists.find(
+      l => l.name.toLowerCase() === TARGET_LIST_NAME.toLowerCase()
+    );
+    if (!targetList) {
+      status.textContent = `❌ Could not find list "${TARGET_LIST_NAME}" on the "${TARGET_BOARD_NAME}" board.`;
+      btn.disabled = false;
+      return;
+    }
+
+    // Process each unlinked DEPOSIT INVOICE checklist item
+    let created = 0;
+    for (let i = 0; i < items.length; i++) {
+      const item     = items[i];
+      const itemName = item.name.trim();
+
+      status.textContent = `Creating invoice card ${i + 1} of ${items.length}: ${itemName}`;
+
+      // Extract percentage — matches "DEPOSIT INVOICE: 25%" or "DEPOSIT INVOICE 25%"
+      const pctMatch = itemName.match(/DEPOSIT INVOICE[:\s]+(\d+(?:\.\d+)?%?)/i);
+      const pct      = pctMatch ? pctMatch[1].replace('%', '').trim() + '%' : itemName.replace(/^DEPOSIT INVOICE[:\s]*/i, '').trim();
+
+      // Build the invoice card title: "Deposit Invoice: 25% - [Parent Card Title]"
+      const invoiceCardName = `Deposit Invoice: ${pct} - ${card.name}`;
+
+      // Description: link back to parent card
+      const invoiceDesc = `⬆️ Parent card: ${card.url}`;
+
+      // Create the invoice card on the target list
+      const createRes = await fetch(`https://api.trello.com/1/cards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          key: API_KEY,
+          token,
+          idList: targetList.id,
+          name:   invoiceCardName,
+          desc:   invoiceDesc
+        })
+      });
+      const invoiceCard = await createRes.json();
+
+      if (!invoiceCard.id) {
+        status.textContent = `❌ Failed to create card for "${itemName}".`;
+        await new Promise(r => setTimeout(r, 2000));
+        continue;
+      }
+
+      // Update the checklist item to be a hyperlink to the invoice card
+      await fetch(`https://api.trello.com/1/cards/${cardId}/checkItem/${item.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          key:  API_KEY,
+          token,
+          name: `[${itemName}](${invoiceCard.url})`
+        })
+      });
+
+      created++;
+      await new Promise(r => setTimeout(r, 300));
+    }
+
+    status.textContent = `✅ Done! ${created} deposit invoice card${created !== 1 ? 's' : ''} created.`;
+
+  } catch (err) {
+    status.textContent = `❌ Error: ${err.message}`;
+    console.error(err);
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>
